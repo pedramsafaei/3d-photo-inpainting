@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import logging
 try:
     import cynetworkx as netx
 except ImportError:
@@ -24,6 +25,8 @@ from mesh_tools import refresh_bord_depth, enlarge_border, fill_dummy_bord, extr
 import transforms3d
 import random
 from functools import reduce
+
+logger = logging.getLogger(__name__)
 
 def create_mesh(depth, image, int_mtx, config):
     H, W, C = image.shape
@@ -696,7 +699,8 @@ def remove_redundant_edge(mesh, edge_mesh, edge_ccs, info_on_pix, config, redund
                         if invalid is True or (point_to_amount.get(ne) is None or point_to_amount[ne] < redundant_number) or \
                             point_to_id[ne] in point_to_adjoint.get(point_to_id[valid_edge_node], set()):
                             mesh.add_edge(valid_edge_node, ne)
-                    except:
+                    except (KeyError, TypeError) as e:
+                        logger.error(f"Error adding edge in mesh construction: {e}")
                         import pdb; pdb.set_trace()
         if (invalid is not True and end_number >= 1) or (invalid is True and end_number >= 2 and eight_end_number >= 1 and db_eight_end_number >= 1):
             for valid_edge_node in valid_edge_cc:
@@ -828,7 +832,8 @@ def remove_dangling(mesh, edge_ccs, edge_mesh, info_on_pix, image, depth, config
                 mesh.add_edge(cc_node, node)
         try:
             re_depth = re_depth['value'] / re_depth['count']
-        except:
+        except (ZeroDivisionError, TypeError, KeyError):
+            # Fallback to original node depth if calculation fails
             re_depth = node[2]
         renode = (node[0], node[1], re_depth)
         mapping_dict = {node: renode}
@@ -856,7 +861,8 @@ def remove_dangling(mesh, edge_ccs, edge_mesh, info_on_pix, image, depth, config
             ne_ccs = netx.connected_components(ne_sub_mesh)
             try:
                 ne_cc = [ne_cc for ne_cc in ne_ccs if ne_node in ne_cc][0]
-            except:
+            except (IndexError, StopIteration):
+                logger.error("Failed to find connected component containing neighbor node")
                 import pdb; pdb.set_trace()
             largest_cc = [xx for xx in ne_cc if abs(xx[0] - node[0]) + abs(xx[1] - node[1]) == 1]
             mesh.remove_edges_from([(xx, node) for xx in mesh.neighbors(node)])
@@ -867,7 +873,8 @@ def remove_dangling(mesh, edge_ccs, edge_mesh, info_on_pix, image, depth, config
                 mesh.add_edge(cc_node, node)
             try:
                 re_depth = re_depth['value'] / re_depth['count']
-            except:
+            except (ZeroDivisionError, TypeError, KeyError):
+                # Fallback to original node depth if calculation fails
                 re_depth = node[2]
             renode = (node[0], node[1], re_depth)
             mapping_dict = {node: renode}
@@ -962,8 +969,8 @@ def context_and_holes(mesh, edge_ccs, config, specific_edge_id, specific_edge_lo
     forbidden_map = np.ones((mesh.graph['H'] - forbidden_len, mesh.graph['W'] - forbidden_len))
     forbidden_map = np.pad(forbidden_map, ((forbidden_len, forbidden_len), (forbidden_len, forbidden_len)), mode='constant').astype(np.bool)
     cur_tmp_mask_map = np.zeros_like(forbidden_map).astype(np.bool)
-    passive_background = 10 if 10 is not None else background_thickness
-    passive_context = 1 if 1 is not None else context_thickness
+    passive_background = 10 if 10 != None else background_thickness
+    passive_context = 1 if 1 != None else context_thickness
 
     for edge_id, edge_cc in enumerate(edge_ccs):
         cur_mask_cc = None; cur_mask_cc = []
@@ -1270,7 +1277,8 @@ def context_and_holes(mesh, edge_ccs, config, specific_edge_id, specific_edge_lo
                 erode_context_ccs[edge_id] = set([])
             else:
                 erode_context_ccs[edge_id] = set(reduce(lambda x, y : x + y, [] + tmp_erode[:tmp_width]))
-        except:
+        except (IndexError, TypeError) as e:
+            logger.error(f"Error processing erode context: {e}")
             import pdb; pdb.set_trace()
         erode_context_cc = copy.deepcopy(erode_context_ccs[edge_id])
         for erode_context_node in erode_context_cc:
@@ -1487,7 +1495,8 @@ def DL_inpaint_edge(mesh,
                 try:
                     edge_dict['fpath_map'], edge_dict['npath_map'], break_flag, npaths, fpaths, invalid_edge_id = \
                         clean_far_edge_new(edge_dict['output'], end_depth_maps, edge_dict['mask'], edge_dict['context'], mesh, info_on_pix, edge_dict['self_edge'], inpaint_iter, config)
-                except:
+                except Exception as e:
+                    logger.error(f"Error in clean_far_edge_new: {e}")
                     import pdb; pdb.set_trace()
                 pre_npath_map = edge_dict['npath_map'].copy()
                 if config.get('repeat_inpaint_edge') is True:
@@ -1758,7 +1767,7 @@ def DL_inpaint_edge(mesh,
             cur_disp = 1./node[2]
             if not(mesh.has_node(node)):
                 if not mesh.has_node((node[0], node[1])):
-                    print("2D node not found.")
+                    logger.error("2D node not found in mesh")
                     import pdb; pdb.set_trace()
                 if inpaint_iter == 1:
                     paint = (rgb_dict['output'][hx, hy] * 255).astype(np.uint8)
@@ -1808,7 +1817,8 @@ def DL_inpaint_edge(mesh,
                 continue
             try:
                 new_edge_ccs[mesh.nodes[node].get('edge_id')].add(node)
-            except:
+            except (IndexError, KeyError) as e:
+                logger.error(f"Error adding node to edge_ccs: {e}")
                 import pdb; pdb.set_trace()
     specific_mask_nodes = None
     if inpaint_iter == 0:
@@ -2032,7 +2042,7 @@ def write_ply(image,
                 node_str_point.append(str_pt)
     str_faces = generate_face(input_mesh, info_on_pix, config)
     if config['save_ply'] is True:
-        print("Writing mesh file %s ..." % ply_name)
+        logger.info(f"Writing mesh file: {ply_name}")
         with open(ply_name, 'w') as ply_fi:
             ply_fi.write('ply\n' + 'format ascii 1.0\n')
             ply_fi.write('comment H ' + str(int(input_mesh.graph['H'])) + '\n')
@@ -2107,7 +2117,8 @@ def read_ply(mesh_fi):
     try:
         colors = np.array(colors)
         colors[..., :3] = colors[..., :3]/255.
-    except:
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error processing colors array: {e}")
         import pdb
         pdb.set_trace()
 
@@ -2181,7 +2192,7 @@ def output_3d_photo(verts, colors, faces, Height, Width, hFov, vFov, tgt_poses, 
 
     fov_in_rad = max(cam_mesh.graph['vFov'], cam_mesh.graph['hFov'])
     fov = (fov_in_rad * 180 / np.pi)
-    print("fov: " + str(fov))
+    logger.info(f"Field of view (FOV): {fov}")
     init_factor = 1
     if config.get('anti_flickering') is True:
         init_factor = 3

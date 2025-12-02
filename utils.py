@@ -1,7 +1,6 @@
 import os
 import glob
 import cv2
-import scipy.misc as misc
 from skimage.transform import resize
 import numpy as np
 from functools import reduce
@@ -10,6 +9,7 @@ import torch
 from torch import nn
 import matplotlib.pyplot as plt
 import re
+import logging
 try:
     import cynetworkx as netx
 except ImportError:
@@ -25,6 +25,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import time
 from scipy.interpolate import interp1d
 from collections import namedtuple
+
+logger = logging.getLogger(__name__)
 
 def path_planning(num_frames, x, y, z, path_type=''):
     if path_type == 'straight-line':
@@ -238,7 +240,8 @@ def clean_far_edge_new(input_edge, end_depth_maps, mask, context, global_mesh, i
                 import pdb; pdb.set_trace()
             try:
                 edge_id = global_mesh.nodes[ends[0]]['edge_id']
-            except:
+            except (KeyError, IndexError) as e:
+                logger.error(f"Failed to get edge_id for node {ends[0]}: {e}")
                 import pdb; pdb.set_trace()
             pnodes = sorted(pnodes, 
                             key=lambda x: np.hypot((x[0] - ends[0][0]), (x[1] - ends[0][1])),
@@ -248,7 +251,7 @@ def clean_far_edge_new(input_edge, end_depth_maps, mask, context, global_mesh, i
                 npath_map[np_node[0], np_node[1]] = edge_id
             fpath = []
             if global_mesh.nodes[ends[0]].get('far') is None:
-                print("None far")
+                logger.warning("None far node encountered in mesh")
             else:
                 fnodes = global_mesh.nodes[ends[0]].get('far')
                 dmask = mask + 0
@@ -349,7 +352,7 @@ def plan_path_e2e(mesh, cc, end_pts, global_mesh, input_edge, mask, valid_map, i
         my_npath_map[np_node[0], np_node[1]] = edge_id
     fpath = []
     if global_mesh.nodes[ends_1].get('far') is None:
-        print("None far")
+        logger.warning("None far node encountered in mesh processing")
     else:
         fnodes = global_mesh.nodes[ends_1].get('far')
         dmask = mask + 0
@@ -458,7 +461,7 @@ def plan_path(mesh, info_on_pix, cc, end_pt, global_mesh, input_edge, mask, vali
         my_npath_map[np_node[0], np_node[1]] = edge_id
     fpath = []
     if global_mesh.nodes[ends[0]].get('far') is None:
-        print("None far")
+        logger.warning("None far node encountered in mesh processing")
     else:
         fnodes = global_mesh.nodes[ends[0]].get('far')
         dmask = mask + 0
@@ -606,7 +609,7 @@ def create_placeholder(context, mask, depth, fpath_map, npath_map, mesh, inpaint
                     not mesh.has_edge((hx, hy), (ne[0], ne[1], depth[ne[0], ne[1]])):
                     mesh.add_edge((hx, hy), (ne[0], ne[1], depth[ne[0], ne[1]]))
                 else:
-                    print("Undefined context node.")
+                    logger.warning("Undefined context node encountered")
                     import pdb; pdb.set_trace()
     near_ids = np.unique(npath_map)
     if near_ids[0] == -1: near_ids = near_ids[1:]
@@ -970,7 +973,7 @@ def follow_image_aspect_ratio(depth, image):
     return depth
 
 def depth_resize(depth, origin_size, image_size):
-    if origin_size[0] is not 0:
+    if origin_size[0] != 0:
         max_depth = depth.max()
         depth = depth / max_depth
         depth = resize(depth, origin_size, order=1, mode='edge')
@@ -1033,11 +1036,13 @@ def filter_irrelevant_edge(self_edge, other_edges, other_edges_with_id, current_
                             try:
                                 if isolate_condition[nx, ny] == 1:
                                     other_edges_info[-1]['edge_map'][nx, ny] = 1
-                            except:
+                            except (IndexError, KeyError):
+                                # Index out of bounds or key missing, skip
                                 pass
     try:
         other_edges_info = sorted(other_edges_info, key=lambda x : x['diff'], reverse=True)
-    except:
+    except (KeyError, TypeError) as e:
+        logger.error(f"Failed to sort other_edges_info: {e}")
         import pdb
         pdb.set_trace()
     # import pdb
@@ -1178,7 +1183,8 @@ def refine_color_around_edge(mesh, info_on_pix, edge_ccs, config, spdb=False):
                             re_depth += mesh.nodes[ne_node]['backup_depth']
                             re_color += mesh.nodes[ne_node]['backup_color'].astype(np.float32)
                             re_count += 1.
-                        except:
+                        except (KeyError, AttributeError) as e:
+                            logger.error(f"Failed to access backup data for node {ne_node}: {e}")
                             import pdb; pdb.set_trace()
                 if re_count > 0:
                     re_depth = re_depth / re_count

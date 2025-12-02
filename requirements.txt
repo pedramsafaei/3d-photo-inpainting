@@ -1,7 +1,39 @@
-opencv-python==4.2.0.32
-vispy==0.6.4
-moviepy==1.0.2
-transforms3d==0.3.1
-networkx==2.3
-cynetworkx
-scikit-image
+# 3D Photo Inpainting - Python Dependencies
+# 
+# Installation:
+#   pip install -r requirements.txt
+#
+# Note: PyTorch should be installed separately based on your CUDA version:
+#   conda install pytorch==1.4.0 torchvision==0.5.0 cudatoolkit==10.1.243 -c pytorch
+#   or visit: https://pytorch.org/get-started/locally/
+
+# Core dependencies
+opencv-python>=4.2.0,<5.0.0
+vispy>=0.6.4,<0.7.0
+moviepy>=1.0.2,<2.0.0
+transforms3d>=0.3.1,<0.4.0
+networkx>=2.3,<3.0.0
+
+# Optional: faster graph operations (fallback to networkx if unavailable)
+cynetworkx; platform_system != "Windows"
+
+# Image processing
+scikit-image>=0.16.2,<0.20.0
+imageio>=2.6.0,<3.0.0
+Pillow>=7.0.0,<10.0.0
+
+# Scientific computing
+numpy>=1.18.0,<1.24.0
+scipy>=1.4.0,<2.0.0
+
+# Deep learning utilities
+tqdm>=4.40.0
+
+# YAML configuration
+PyYAML>=5.3,<7.0
+
+# Note: The following packages are typically installed via conda:
+# - pytorch==1.4.0
+# - torchvision==0.5.0
+# - cudatoolkit==10.1.243 (if using GPU)
+

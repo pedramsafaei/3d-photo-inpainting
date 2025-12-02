@@ -1,0 +1,83 @@
+# 3D Photo Inpainting - Configuration Example
+# 
+# This file provides a template for configuring the 3D photo inpainting pipeline.
+# Copy this file and modify the parameters according to your needs.
+#
+# For more details, see DOCUMENTATION.md
+
+# Model checkpoint paths
+# Download models using: ./download.sh
+depth_edge_model_ckpt: checkpoints/edge-model.pth
+depth_feat_model_ckpt: checkpoints/depth-model.pth
+rgb_feat_model_ckpt: checkpoints/color-model.pth
+MiDaS_model_ckpt: MiDaS/model.pt
+
+# Video generation settings
+fps: 40                  # Frames per second for output videos
+num_frames: 240          # Total number of frames in each video
+
+# Camera motion trajectories
+# Define camera movements for each trajectory type
+x_shift_range: [0.00, 0.00, -0.02, -0.02]
+y_shift_range: [0.00, 0.00, -0.02, -0.00]
+z_shift_range: [-0.05, -0.05, -0.07, -0.07]
+
+# Trajectory types: 'straight-line', 'double-straight-line', 'circle'
+traj_types: ['double-straight-line', 'double-straight-line', 'circle', 'circle']
+
+# Video postfixes for output files
+video_postfix: ['dolly-zoom-in', 'zoom-in', 'circle', 'swing']
+
+# Input/Output settings
+specific: ''             # Process specific image (leave empty for all images)
+longer_side_len: 960     # Longer side length for processing (smaller = faster, lower quality)
+src_folder: image        # Source image folder
+depth_folder: depth      # Output depth map folder
+mesh_folder: mesh        # Output 3D mesh folder
+video_folder: video      # Output video folder
+img_format: '.jpg'       # Image format to process
+
+# Processing options
+load_ply: False          # Load existing .ply mesh files instead of regenerating
+save_ply: True           # Save generated .ply mesh files
+inference_video: True    # Generate output videos
+
+# Hardware settings
+gpu_ids: 0               # GPU ID to use (-1 for CPU, 0+ for GPU)
+offscreen_rendering: False  # Use offscreen rendering (for headless servers)
+
+# Depth processing parameters
+depth_threshold: 0.04    # Threshold for depth discontinuities
+ext_edge_threshold: 0.002  # Threshold for extended edge detection
+sparse_iter: 5           # Number of sparse bilateral filtering iterations
+filter_size: [7, 7, 5, 5, 5]  # Kernel sizes for bilateral filtering
+sigma_s: 4.0             # Spatial sigma for bilateral filtering
+sigma_r: 0.5             # Range sigma for bilateral filtering
+
+# Mesh construction parameters
+redundant_number: 12     # Redundancy factor for mesh vertices
+background_thickness: 70      # Background layer thickness
+context_thickness: 140        # Context layer thickness
+background_thickness_2: 70    # Secondary background thickness
+context_thickness_2: 70       # Secondary context thickness
+discount_factor: 1.00    # Discount factor for depth values
+log_depth: True          # Use logarithmic depth values
+largest_size: 512        # Maximum size for inpainting patches
+
+# Edge detection and refinement
+depth_edge_dilate: 10    # Dilation for depth edges (primary)
+depth_edge_dilate_2: 5   # Dilation for depth edges (secondary)
+extrapolate_border: True # Extrapolate to image borders
+extrapolation_thickness: 60  # Thickness for border extrapolation
+repeat_inpaint_edge: True    # Repeat edge inpainting for better results
+
+# Video rendering settings
+crop_border: [0.03, 0.03, 0.05, 0.03]  # Border crop ratios [top, bottom, left, right]
+anti_flickering: True    # Apply anti-flickering post-processing
+
+# Tips for parameter tuning:
+# - Increase 'longer_side_len' for higher quality but slower processing
+# - Adjust 'sparse_iter' (3-7) for depth refinement quality
+# - Modify 'context_thickness' (100-200) to control inpainting region size
+# - Set 'offscreen_rendering: True' for servers without display
+# - Use 'gpu_ids: -1' or 'gpu_ids: cpu' to force CPU processing

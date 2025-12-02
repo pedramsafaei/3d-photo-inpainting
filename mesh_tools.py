@@ -6,31 +6,29 @@ except ImportError:
     import networkx as netx
 
 import json
-import scipy.misc as misc
-#import OpenEXR
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 import cv2
-import scipy.misc as misc
 from skimage import io
 from functools import partial
 from vispy import scene, io
 from vispy.scene import visuals
 from functools import reduce
-# from moviepy.editor import ImageSequenceClip
-import scipy.misc as misc
 from vispy.visuals.filters import Alpha
 import cv2
 from skimage.transform import resize
 import copy
 import torch
 import os
+import logging
 from utils import refine_depth_around_edge, smooth_cntsyn_gap
 from utils import require_depth_edge, filter_irrelevant_edge_new, open_small_mask
 from skimage.feature import canny
 from scipy import ndimage
 import time
 import transforms3d
+
+logger = logging.getLogger(__name__)
 
 def relabel_node(mesh, nodes, cur_node, new_node):
     if cur_node == new_node:
@@ -249,7 +247,7 @@ def extrapolate(global_mesh,
                 npath_map[np_node[0], np_node[1]] = edge_id
             fpath = []
             if global_mesh.nodes[(ends[0][0] + all_anchor[0], ends[0][1] + all_anchor[2], -ends[0][2])].get('far') is None:
-                print("None far")
+                logger.warning("None far node encountered in mesh processing")
                 import pdb; pdb.set_trace()
             else:
                 fnodes = global_mesh.nodes[(ends[0][0] + all_anchor[0], ends[0][1] + all_anchor[2], -ends[0][2])].get('far')
@@ -520,7 +518,7 @@ def fill_missing_node(mesh, info_on_pix, image, depth):
     for x in range(mesh.graph['bord_up'], mesh.graph['bord_down']):
         for y in range(mesh.graph['bord_left'], mesh.graph['bord_right']):
             if info_on_pix.get((x, y)) is None:
-                print("fill missing node = ", x, y)
+                logger.debug(f"Filling missing node at coordinates: {x}, {y}")
                 import pdb; pdb.set_trace()
                 re_depth, re_count = 0, 0
                 for ne in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
@@ -828,7 +826,8 @@ def recursive_add_edge(edge_mesh, mesh, info_on_pix, cur_node, mark):
                 re_info['count'] += 1.
             try:
                 re_depth = re_info['depth'] / re_info['count']
-            except:
+            except (ZeroDivisionError, TypeError, KeyError):
+                # Fallback to original node depth if calculation fails
                 re_depth = node[2]
             re_node = (node_xy[0], node_xy[1], re_depth)
             mapping_dict = {node: re_node}
